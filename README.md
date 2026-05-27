@@ -285,6 +285,6 @@ Every query is traced node-by-node in LangSmith. Set `LANGCHAIN_TRACING_V2=true`
 
 ## Author
 
-**Manoj Kumar** · M.Sc. Computer Science (AI & ML), Scaler Neoversity · CGPA 3.7
+**Manoj Kumar** · M.Sc. Computer Science (AI & ML), Scaler Neoversity
 
-[GitHub](https://github.com/mojomahendia) · [LinkedIn](#)
+[GitHub](https://github.com/mojomahendia)
