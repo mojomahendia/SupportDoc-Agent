@@ -30,7 +30,8 @@ def _fetch_content(url: str) -> str:
     for tag in soup.find_all(class_=lambda c: c and any(x in " ".join(c) for x in _NOISE_CLASSES)):
         tag.decompose()
 
-    main = soup.find("article") or soup.find("main") or soup.body
+    content_divs = soup.select("div.content")
+    main = max(content_divs, key=lambda el: len(el.get_text()), default=None) or soup.find("article") or soup.find("main") or soup.body
     return main.get_text(separator="\n", strip=True) if main else ""
 
 
