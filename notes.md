@@ -70,3 +70,11 @@
 load_documents() → chunk_documents() → embed → store in ChromaDB
 ```
 Run once. Agent queries ChromaDB directly at runtime.
+
+## vector database
+Chose ChromaDB over Pinecone and Weaviate. Corpus is ~500 chunks — well within ChromaDB's local performance range. ChromaDB persists to disk with no managed infrastructure, adds zero network latency on retrieval, and metadata filtering works natively. Would switch to Pinecone if this became a multi-developer or high-query-volume production system, or Weaviate if hybrid BM25 + vector search was needed for better keyword-heavy queries.
+
+- Evaluated FAISS but ruled it out — FAISS is a similarity search library with no built-in metadata storage or filtering. Would require building a parallel metadata store and keeping it in sync manually. ChromaDB provides both vector search and metadata filtering in one component, which is the correct tradeoff for a RAG pipeline where source citations depend on chunk metadata
+
+-Used text-embedding-3-small over text-embedding-ada-002 — newer model, higher MTEB benchmark scores, 5x cheaper. Did not use text-embedding-3-large because the quality gain from doubled dimensions is negligible at ~500 chunk corpus scale. Embedding model defined once in settings.py and imported everywhere to guarantee ingestion and retrieval use identical models — mismatched models produce silent retrieval failures.
+
