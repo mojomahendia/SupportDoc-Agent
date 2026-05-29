@@ -1,0 +1,156 @@
+[
+  {
+    "question": "Why does a Windows Autopilot enrollment get stuck at the Account Setup screen for an extended period?",
+    "ground_truth": "This usually happens because of pending app installations or device configuration profiles that haven't completed. The Enrollment Status Page (ESP) is waiting for required apps or settings to apply. Check the ESP timeout configuration, verify all required apps assigned to the user or device, and review the IME (Intune Management Extension) logs on the device for failures.",
+    "source_url": "https://learn.microsoft.com/en-us/autopilot/troubleshoot-windows-autopilot",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB — run similarity_search on the question and copy top result"
+    ]
+  },
+  {
+    "question": "What does Intune enrollment error 0x801c03ed mean and what causes it?",
+    "ground_truth": "Error 0x801c03ed indicates that the maximum number of devices for the user has been reached in Azure AD. Each user has a configurable device limit in the Azure AD device settings. To resolve this, either remove stale devices the user no longer uses, or increase the per-user device limit in Azure AD device settings.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-windows-enrollment-errors",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "Why does an iOS device fail to enroll with the error 'Profile installation failed'?",
+    "ground_truth": "This error typically occurs when the Apple MDM push certificate has expired, the device is not connected to the Apple network services required for enrollment, or the user does not have the correct Intune license assigned. Verify the Apple MDM push certificate validity in the Intune admin center under Devices > iOS/iPadOS enrollment, and ensure the user has an Intune license.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-ios-enrollment-errors",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I bulk enroll Android Enterprise dedicated devices using a QR code in Intune?",
+    "ground_truth": "Create an Android Enterprise dedicated device enrollment profile in the Intune admin center under Devices > Android > Android enrollment > Corporate-owned dedicated devices. The profile generates a QR code that can be scanned during the initial device setup after a factory reset. The device must be in Android Enterprise factory-reset state before scanning.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/enrollment/android-dedicated-devices-fully-managed-enroll",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I migrate Windows devices from hybrid Azure AD join to full Intune management?",
+    "ground_truth": "First ensure the device is hybrid Azure AD joined and Intune-licensed. Configure auto-enrollment in the Azure AD MDM settings, then deploy a Group Policy or scheduled task to trigger MDM enrollment via the 'Enroll only to device management' option. After successful enrollment, gradually move workloads (compliance, configuration, apps) from Configuration Manager to Intune using co-management workload sliders.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/fundamentals/windows-10-deployment-scenarios-for-intune",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "Why is a Win32 app showing as 'Not applicable' in the Intune admin center for a targeted user?",
+    "ground_truth": "'Not applicable' usually indicates the device does not meet the app's requirement rules — minimum operating system version, architecture (x86/x64), disk space, or custom requirement scripts. Review the requirement rules configured on the app and verify the target device meets each one. Custom requirement scripts that fail or timeout will also produce this status.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-management/troubleshoot-app-install",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I troubleshoot Microsoft Store apps that fail to install on Intune-managed Windows 11 devices?",
+    "ground_truth": "Verify that the device is Azure AD joined or hybrid joined and that the user is signed in with their work account. Check that Microsoft Store access is not blocked by configuration policy, and confirm that the device has internet connectivity to the required Microsoft endpoints. Review the IME logs at C:\\ProgramData\\Microsoft\\IntuneManagementExtension\\Logs for specific error codes.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-management/troubleshoot-store-apps",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "What is the difference between Required and Available app assignment in Intune?",
+    "ground_truth": "Required assignments install the app automatically on the user's or device's enrolled devices without user interaction. Available assignments make the app appear in the Company Portal where the user can choose to install it manually. Required is used for mandatory business apps; Available is used for optional apps the user may or may not need.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/apps/apps-deploy",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "Why are line-of-business iOS apps not appearing in the Company Portal for assigned users?",
+    "ground_truth": "Common causes include the user not having an Intune license, the app being assigned to a group the user is not a member of, the app being assigned as Required but not yet synced to the device, or the user's iOS device not being enrolled. Verify the assignment scope and trigger a device sync from the Company Portal app.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-management/troubleshoot-ios-lob-app-deployment",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I deploy a custom Wi-Fi configuration profile to corporate iOS devices in Intune?",
+    "ground_truth": "Navigate to Devices > Configuration profiles > Create profile, select iOS/iPadOS as platform and Templates > Wi-Fi as profile type. Configure the SSID, security type (WPA2/WPA3 Enterprise typically), and any required certificates for EAP authentication. Assign to a device group of corporate iOS devices.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/configuration/wi-fi-settings-ios",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "Why is a device configuration profile showing 'Conflict' status for some users?",
+    "ground_truth": "Conflict status means two or more configuration profiles are targeting the same setting on the same device with different values. Intune cannot determine which value to apply so it reports a conflict. Review profile assignments in the device's per-setting status view in Intune to identify which profiles are configuring the same setting and consolidate or remove the conflicting profile.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-configuration/troubleshoot-policies-in-microsoft-intune",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How can I restrict USB storage devices on Windows 10 and 11 devices managed by Intune?",
+    "ground_truth": "Use a Settings Catalog or Device Restrictions configuration profile. Under General settings, find 'Removable Storage' and set 'Block' to Yes. Alternatively, deploy a custom OMA-URI policy targeting ./Vendor/MSFT/Policy/Config/Storage/RemovableDiskDenyWriteAccess to enforce read-only or full block at the device level.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/configuration/device-restrictions-windows-10",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "What is the correct OMA-URI to disable Bluetooth on Windows devices via Intune?",
+    "ground_truth": "Use the OMA-URI ./Vendor/MSFT/Policy/Config/Connectivity/AllowBluetooth with a data type of Integer and a value of 0 to disable Bluetooth. Create this as a custom configuration profile under Devices > Configuration profiles > Create profile > Windows 10 and later > Templates > Custom, then assign to the target device group.",
+    "source_url": "https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-connectivity",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "Why is a Windows device marked non-compliant in Intune despite meeting all the listed compliance requirements?",
+    "ground_truth": "This often happens when the device has not yet reported its compliance status after a recent policy change, or when a setting like BitLocker or Windows Defender is reported by the OS as not configured even when active. Trigger a manual sync from the Company Portal, review the per-setting compliance status in the device view, and check the device's Defender and BitLocker status using PowerShell to confirm OS-level reporting.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-compliance/troubleshoot-compliance-policies",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I configure an Intune compliance policy that requires BitLocker encryption on Windows 11 devices?",
+    "ground_truth": "Create a compliance policy under Devices > Compliance policies > Create policy, select Windows 10 and later as the platform. Under System Security, set 'Encryption of data storage on device' to Require. Assign the policy to a Windows 11 device or user group. Devices without BitLocker will be reported as non-compliant.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/protect/compliance-policy-create-windows",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "What happens when an Android device fails Play Integrity verification in an Intune compliance policy?",
+    "ground_truth": "When Play Integrity verification fails, the device is marked as non-compliant in Intune. Conditional Access policies tied to compliance will then block the device from accessing protected resources like Exchange Online or SharePoint. Common causes for failure include rooted devices, custom ROMs, or devices that fail the SafetyNet/Play Integrity attestation checks.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/protect/compliance-policy-create-android-for-work",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I configure a grace period for non-compliant devices in Intune before they lose access to corporate resources?",
+    "ground_truth": "When creating or editing a compliance policy, under 'Actions for noncompliance', add an action 'Mark device noncompliant' and set a schedule (in days) before the action takes effect. This creates a grace period during which the device remains compliant in the eyes of Conditional Access while the user is notified to remediate. After the grace period, the device is marked non-compliant and access is blocked.",
+    "source_url": "https://learn.microsoft.com/en-us/intune/intune-service/protect/actions-for-noncompliance",
+    "contexts": [
+      "PASTE CHUNK FROM CHROMADB"
+    ]
+  },
+  {
+    "question": "How do I configure Cisco AnyConnect VPN client policies on Windows endpoints?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  },
+  {
+    "question": "What is the maximum subnet size supported in Azure Virtual Network?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  },
+  {
+    "question": "How do I install and promote a domain controller on Windows Server 2022?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  }
+]
