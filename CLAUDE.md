@@ -521,25 +521,3 @@ below. These become interview answers.
 | 8 | At least one metric improved by 0.05 after retrieval fix |
 | 9 | App live at public URL · demoed on phone · URL in README |
 
----
-
-## Interview Cheat Sheet
-
-**First 90 seconds on any call:**
-
-1. Name the architecture: *"I built an agentic RAG pipeline with a
-   self-correction loop using LangGraph StateGraph"* — not tool names.
-
-2. Lead with a decision: *"I chose to separate query rewriting from
-   retrieval because initial queries are often too vague for semantic
-   search"* — not feature descriptions.
-
-3. Quote a number: *"context recall improved from 0.62 to 0.84 after
-   adding MultiQueryRetriever"* — not vague quality claims.
-
-**Answer to 'Why move from escalation to AI engineering?':**
-> "I spent 4 years resolving Intune escalations. The same questions came
-> in every week. I started building RAG systems to answer those questions
-> automatically. SupportDoc Agent is that idea built to production.
-> I am not moving away from my experience — I am applying it at a
-> different layer of the stack."

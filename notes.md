@@ -65,11 +65,16 @@
   agent prefer official sources. Deduplication by embedding similarity can be added
   later if retrieval quality drops.
 
-## Ingestion Pipeline (planned)
+## Ingestion Pipeline
 ```
 load_documents() → chunk_documents() → embed → store in ChromaDB
 ```
-Run once. Agent queries ChromaDB directly at runtime.
+Run once via `python run_ingestion.py`. Agent queries ChromaDB directly at runtime. ChromaDB appends to existing collections rather than overwriting — delete `./chroma_db/` before re-running.
+
+## Query Router (`graph/nodes/router.py`)
+- Used `llm.with_structured_output(RouteDecision)` where `RouteDecision` is a Pydantic model with `route: Literal["retrieve", "direct_answer"]`. This uses OpenAI's function-calling under the hood — the LLM cannot return anything outside those two values. Cleaner and more reliable than parsing free text or regex-matching.
+- Prompt biases heavily toward `retrieve`. Only classifies as `direct_answer` for general conversational questions any IT professional would know without documentation. When in doubt, `retrieve` — a missed retrieval is recoverable; a hallucinated direct answer is not.
+- `temperature=0` on the shared LLM client — this is a classifier, randomness has no value here.
 
 ## Query Rewriter (`graph/nodes/rewriter.py`)
 - Chose step-back prompting (arxiv 2310.06117) over HyDE (arxiv 2212.10496).
@@ -77,6 +82,20 @@ Run once. Agent queries ChromaDB directly at runtime.
 - Always rewrites from `state["query"]` (the original), never from the previous `rewritten_query`. Original preserves more user intent; rewriting the rewrite risks drift.
 - `retrieval_count` is passed to the prompt so the LLM knows to go broader on the second attempt.
 - `retrieval_count` is NOT incremented here — the retriever node increments it when the ChromaDB call actually happens, keeping "attempts so far" semantically correct.
+
+## Relevance Grader (`graph/nodes/grader.py`)
+- LLM-as-judge over cosine similarity threshold: a similarity threshold is fast but brittle — a chunk about "certificate renewal" might score high similarity against "enrollment error 80180014" because vocabulary overlaps, but it isn't useful for answering that question. The LLM reasons about relevance semantically. Tradeoff: ~300–500ms and one API call per chunk. Worth it for quality at this corpus scale.
+- `relevant: bool` in the Pydantic model over `Literal["YES","NO"]`: bool is cleaner — no string parsing, Pydantic validates it natively via `with_structured_output`, and the grader loop reads `score.relevant` directly.
+- Grading query uses `rewritten_query` if available, else falls back to `query` — the rewrite is more specific and gives the LLM better context for judging relevance.
+- Filters `documents` in-place: returns only the chunks that passed grading. The generator receives only relevant content; no noise passed downstream.
+
+## Retriever (`graph/nodes/retriever.py`)
+- No LLM call — purely a ChromaDB `similarity_search`. The only node with no prompt file.
+- `k=4`: balances grader latency (4 serial LLM calls at ~300–500ms each) against retrieval coverage. Increasing k improves recall but adds proportional grader latency.
+- Module-level singletons for `_embeddings` and `_vectorstore`: constructed once on first import, reused across all graph invocations in the same process. Avoids repeated ChromaDB disk I/O and connection overhead on every query.
+- `persist_directory` computed as absolute path from `__file__` — avoids silent failure when the process is started from a directory other than the project root.
+- Uses `Chroma(persist_directory=..., embedding_function=...)` not `Chroma.from_documents()` — the former loads an existing store; the latter creates a new one, destroying the ingested data.
+- `retrieval_count` incremented here (not in the rewriter) because the count means "how many ChromaDB calls have happened so far", which is only true after the search runs.
 
 ## Graph State (`graph/state.py`)
 - Plain `TypedDict` with all seven fields present: `query`, `rewritten_query`, `route`, `documents`, `relevance`, `retrieval_count`, `generation`.
@@ -89,8 +108,6 @@ Chose ChromaDB over Pinecone and Weaviate. Corpus is ~500 chunks — well within
 
 - Evaluated FAISS but ruled it out — FAISS is a similarity search library with no built-in metadata storage or filtering. Would require building a parallel metadata store and keeping it in sync manually. ChromaDB provides both vector search and metadata filtering in one component, which is the correct tradeoff for a RAG pipeline where source citations depend on chunk metadata
 
--Used text-embedding-3-small over text-embedding-ada-002 — newer model, higher MTEB benchmark scores, 5x cheaper. Did not use text-embedding-3-large because the quality gain from doubled dimensions is negligible at ~500 chunk corpus scale. Embedding model defined once in settings.py and imported everywhere to guarantee ingestion and retrieval use identical models — mismatched models produce silent retrieval failures.
+- Used `text-embedding-3-small` over `text-embedding-ada-002` — newer model, higher MTEB benchmark scores, 5x cheaper. Did not use `text-embedding-3-large` because the quality gain from doubled dimensions is negligible at ~500 chunk corpus scale. Embedding model must be identical between ingestion (`ingestion/vector_store.py`) and retrieval (`graph/nodes/retriever.py`) — mismatched models produce silent retrieval failures with no error message.
 
-llm: temprature=0. It's a classifier. hence we did not need any randomness.
-
-
+Used with_structured_output() on router and grader nodes to enforce exact output schemas via Pydantic models. Eliminates string parsing fragility — the LLM returns a typed Python object instead of free text. Set temperature=0 on all decision nodes because they make binary judgments where determinism matters more than creativity.
