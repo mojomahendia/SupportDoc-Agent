@@ -1,3 +1,13 @@
 from typing import TypedDict
 
-class 
+from langchain_core.documents import Document
+
+
+class SupportDocState(TypedDict):
+    query: str
+    rewritten_query: str
+    route: str
+    documents: list[Document]
+    relevance: str
+    retrieval_count: int
+    generation: str

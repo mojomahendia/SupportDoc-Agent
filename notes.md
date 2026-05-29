@@ -65,16 +65,55 @@
   agent prefer official sources. Deduplication by embedding similarity can be added
   later if retrieval quality drops.
 
-## Ingestion Pipeline (planned)
+## Ingestion Pipeline
 ```
 load_documents() → chunk_documents() → embed → store in ChromaDB
 ```
-Run once. Agent queries ChromaDB directly at runtime.
+Run once via `python run_ingestion.py`. Agent queries ChromaDB directly at runtime. ChromaDB appends to existing collections rather than overwriting — delete `./chroma_db/` before re-running.
+
+## Query Router (`graph/nodes/router.py`)
+- Used `llm.with_structured_output(RouteDecision)` where `RouteDecision` is a Pydantic model with `route: Literal["retrieve", "direct_answer"]`. This uses OpenAI's function-calling under the hood — the LLM cannot return anything outside those two values. Cleaner and more reliable than parsing free text or regex-matching.
+- Prompt biases heavily toward `retrieve`. Only classifies as `direct_answer` for general conversational questions any IT professional would know without documentation. When in doubt, `retrieve` — a missed retrieval is recoverable; a hallucinated direct answer is not.
+- `temperature=0` on the shared LLM client — this is a classifier, randomness has no value here.
+
+## Query Rewriter (`graph/nodes/rewriter.py`)
+- Chose step-back prompting (arxiv 2310.06117) over HyDE (arxiv 2212.10496).
+  HyDE generates a hypothetical answer document and uses it as the search query — but for Intune troubleshooting, HyDE hallucinates domain-specific details in the hypothetical, producing a search query full of confident-sounding wrong information. Step-back is more controlled: it broadens vocabulary predictably by expanding specific symptoms to general concepts and adding MDM/MEM/Entra ID synonyms. Error codes are preserved exactly — they are the highest-signal retrieval tokens and must not be paraphrased.
+- Always rewrites from `state["query"]` (the original), never from the previous `rewritten_query`. Original preserves more user intent; rewriting the rewrite risks drift.
+- `retrieval_count` is passed to the prompt so the LLM knows to go broader on the second attempt.
+- `retrieval_count` is NOT incremented here — the retriever node increments it when the ChromaDB call actually happens, keeping "attempts so far" semantically correct.
+
+## Generator (`graph/nodes/generator.py`)
+- Retrieved case prompt instructs "use ONLY the provided excerpts" — prevents the LLM from mixing in training-data knowledge that may be outdated or contradict the official Microsoft docs. If the excerpts don't fully answer the question, the LLM is instructed to say so explicitly rather than silently filling gaps with potentially wrong information.
+- Citations deduped by URL (not by title) — a single article produces multiple chunks; we want one citation per source article. Sorted by `priority` metadata so Microsoft Learn (priority 1) appears before community blogs (priority 2).
+- Fallback is a hardcoded string with no LLM call — when both retrieval attempts failed, the corpus doesn't cover the topic. Calling the LLM at this point would either hallucinate an answer or produce the same "I don't know" with added latency and cost. Neither is acceptable.
+- Branch order: check `documents` emptiness first, then `route`. This means an empty `documents` list always triggers fallback regardless of route — a defensive guard against unexpected state combinations.
+
+## Relevance Grader (`graph/nodes/grader.py`)
+- LLM-as-judge over cosine similarity threshold: a similarity threshold is fast but brittle — a chunk about "certificate renewal" might score high similarity against "enrollment error 80180014" because vocabulary overlaps, but it isn't useful for answering that question. The LLM reasons about relevance semantically. Tradeoff: ~300–500ms and one API call per chunk. Worth it for quality at this corpus scale.
+- `relevant: bool` in the Pydantic model over `Literal["YES","NO"]`: bool is cleaner — no string parsing, Pydantic validates it natively via `with_structured_output`, and the grader loop reads `score.relevant` directly.
+- Grading query uses `rewritten_query` if available, else falls back to `query` — the rewrite is more specific and gives the LLM better context for judging relevance.
+- Filters `documents` in-place: returns only the chunks that passed grading. The generator receives only relevant content; no noise passed downstream.
+
+## Retriever (`graph/nodes/retriever.py`)
+- No LLM call — purely a ChromaDB `similarity_search`. The only node with no prompt file.
+- `k=4`: balances grader latency (4 serial LLM calls at ~300–500ms each) against retrieval coverage. Increasing k improves recall but adds proportional grader latency.
+- Module-level singletons for `_embeddings` and `_vectorstore`: constructed once on first import, reused across all graph invocations in the same process. Avoids repeated ChromaDB disk I/O and connection overhead on every query.
+- `persist_directory` computed as absolute path from `__file__` — avoids silent failure when the process is started from a directory other than the project root.
+- Uses `Chroma(persist_directory=..., embedding_function=...)` not `Chroma.from_documents()` — the former loads an existing store; the latter creates a new one, destroying the ingested data.
+- `retrieval_count` incremented here (not in the rewriter) because the count means "how many ChromaDB calls have happened so far", which is only true after the search runs.
+
+## Graph State (`graph/state.py`)
+- Plain `TypedDict` with all seven fields present: `query`, `rewritten_query`, `route`, `documents`, `relevance`, `retrieval_count`, `generation`.
+- No `NotRequired` or `total=False` — LangGraph nodes return partial dicts and the framework merges them back in. TypedDict completeness is not validated at runtime; fields absent on the first pass are simply not in the dict yet.
+- Nodes that read fields not yet set (e.g., `rewritten_query` before the rewriter runs) use `.get()` with a default, not direct key access, to avoid `KeyError` on the first pass.
+- `query` is never modified after entry. The rewriter always writes to `rewritten_query`.
 
 ## vector database
 Chose ChromaDB over Pinecone and Weaviate. Corpus is ~500 chunks — well within ChromaDB's local performance range. ChromaDB persists to disk with no managed infrastructure, adds zero network latency on retrieval, and metadata filtering works natively. Would switch to Pinecone if this became a multi-developer or high-query-volume production system, or Weaviate if hybrid BM25 + vector search was needed for better keyword-heavy queries.
 
 - Evaluated FAISS but ruled it out — FAISS is a similarity search library with no built-in metadata storage or filtering. Would require building a parallel metadata store and keeping it in sync manually. ChromaDB provides both vector search and metadata filtering in one component, which is the correct tradeoff for a RAG pipeline where source citations depend on chunk metadata
 
--Used text-embedding-3-small over text-embedding-ada-002 — newer model, higher MTEB benchmark scores, 5x cheaper. Did not use text-embedding-3-large because the quality gain from doubled dimensions is negligible at ~500 chunk corpus scale. Embedding model defined once in settings.py and imported everywhere to guarantee ingestion and retrieval use identical models — mismatched models produce silent retrieval failures.
+- Used `text-embedding-3-small` over `text-embedding-ada-002` — newer model, higher MTEB benchmark scores, 5x cheaper. Did not use `text-embedding-3-large` because the quality gain from doubled dimensions is negligible at ~500 chunk corpus scale. Embedding model must be identical between ingestion (`ingestion/vector_store.py`) and retrieval (`graph/nodes/retriever.py`) — mismatched models produce silent retrieval failures with no error message.
 
+Used with_structured_output() on router and grader nodes to enforce exact output schemas via Pydantic models. Eliminates string parsing fragility — the LLM returns a typed Python object instead of free text. Set temperature=0 on all decision nodes because they make binary judgments where determinism matters more than creativity.
