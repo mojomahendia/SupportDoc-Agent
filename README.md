@@ -1,14 +1,49 @@
-# SupportDoc Agent
+<p align="center">
+  <img src="logo.png" width="160" alt="SupportDoc Agent logo"/>
+</p>
 
-> Agentic RAG pipeline that answers Microsoft Intune support questions using self-correcting retrieval, LLM-as-judge relevance grading, and source-cited generation.
+<h1 align="center">SupportDoc Agent</h1>
 
-**Live demo:** *(deploying to Streamlit Community Cloud — URL coming soon)* · **Stack:** Python · LangGraph · LangChain · ChromaDB · RAGAs · LangSmith
+<p align="center">
+  <strong>Agentic RAG for Microsoft Intune troubleshooting</strong><br/>
+  Self-correcting retrieval · LLM-as-judge grading · source-cited answers
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/LangGraph-StateGraph-6C47FF?logo=chainlink&logoColor=white" alt="LangGraph"/>
+  <img src="https://img.shields.io/badge/LLM-GPT--4o--mini-10a37f?logo=openai&logoColor=white" alt="GPT-4o-mini"/>
+  <img src="https://img.shields.io/badge/Vector_DB-ChromaDB-orange" alt="ChromaDB"/>
+  <img src="https://img.shields.io/badge/Eval-RAGAs-blueviolet" alt="RAGAs"/>
+  <img src="https://img.shields.io/badge/UI-Streamlit-FF4B4B?logo=streamlit&logoColor=white" alt="Streamlit"/>
+</p>
+
+<p align="center">
+  <a href="https://github.com/mojomahendia/SupportDoc-Agent"><strong>GitHub</strong></a> ·
+  <em>Live demo coming soon on Streamlit Community Cloud</em>
+</p>
 
 ---
 
-## Why I Built This
+## What it does
 
-I spent 4 years resolving Microsoft Intune escalations. The same questions came in every week — enrollment errors, MDM certificate failures, app deployment issues. I started building RAG systems to answer those questions automatically. SupportDoc Agent is that idea built to production quality. I am not moving away from my support experience — I am applying it at a different layer of the stack.
+SupportDoc Agent answers Microsoft Intune troubleshooting questions by searching a curated corpus of official Microsoft Learn documentation. It is **not** a simple retrieve-and-generate system.
+
+The LLM makes routing and quality decisions at every step:
+
+- Routes conversational questions to a direct LLM answer, skipping retrieval entirely
+- Rewrites the query using step-back prompting before searching ChromaDB
+- Grades each retrieved chunk individually with an LLM judge — irrelevant chunks never reach the generator
+- Retries with a broader rewritten query if the first retrieval fails
+- Falls back gracefully when the answer is genuinely not in the corpus, instead of hallucinating
+
+---
+
+## Why I built this
+
+I spent 4 years resolving Microsoft Intune escalations. The same questions came in every week — enrollment errors, MDM certificate failures, app deployment issues. I started building RAG systems to answer those questions automatically.
+
+SupportDoc Agent is that idea built to production quality. I am not moving away from my support experience — I am applying it at a different layer of the stack.
 
 ---
 
@@ -18,199 +53,157 @@ I spent 4 years resolving Microsoft Intune escalations. The same questions came 
 User Query
     │
     ▼
-┌─────────────────┐
-│  Query Router   │──── Can answer directly? ──YES──► Direct LLM Answer
-└────────┬────────┘
-         │ needs docs
+┌───────────────────┐
+│   Query Router    │──── General knowledge? ──YES──► Direct LLM Answer ──► END
+└────────┬──────────┘
+         │ Intune-specific
          ▼
-┌─────────────────┐
-│ Query Rewriter  │  Improves query before retrieval (step-back prompting)
-└────────┬────────┘
+┌───────────────────┐
+│  Query Rewriter   │  Step-back prompting — broadens vocabulary, preserves error codes
+└────────┬──────────┘
          ▼
-┌─────────────────┐
-│    Retriever    │  ChromaDB semantic search · top-k chunks
-└────────┬────────┘
+┌───────────────────┐
+│     Retriever     │  ChromaDB similarity search · top-5 chunks
+└────────┬──────────┘
          ▼
-┌─────────────────┐
-│ Relevance Grader│  LLM-as-judge · grades each chunk YES/NO
-└────────┬────────┘
+┌───────────────────┐
+│ Relevance Grader  │  LLM-as-judge · grades each chunk YES/NO · filters in-place
+└────────┬──────────┘
          │
-         ├── RELEVANT ──────────────► Generator ──► Answer + citations
+         ├── RELEVANT ─────────────────► Generator ──► Answer + source citations ──► END
          │
-         └── NOT RELEVANT ──────────► Rewriter (loop · max 2 attempts)
-                                           │
-                                    Still failing?
-                                           │
-                                           ▼
-                               "I don't have enough information."
+         └── NOT RELEVANT (attempt < 2) ► Rewriter ◄── CYCLE
+         │
+         └── NOT RELEVANT (attempt = 2) ► Generator ──► Fallback message ──► END
 ```
 
 ### State — what flows through the graph
 
-| Key | Purpose |
-|-----|---------|
-| `query` | Original user question. Never modified after entry. |
-| `rewritten_query` | Improved query from the rewriter node. Used on retry. |
-| `route` | `retrieve` or `direct_answer`. Set by the router. |
-| `documents` | List of LangChain Document objects from the retriever. |
-| `relevance` | `relevant` or `not_relevant`. Set by the grader. |
-| `retrieval_count` | Integer. How many retrieval attempts so far. Max = 2. |
-| `generation` | The final answer string. Set by the generator. |
+Every node reads from and writes to a shared `SupportDocState` TypedDict. LangGraph merges partial updates back into the state — no node touches keys it doesn't own.
+
+| Key | Type | Written by |
+|-----|------|-----------|
+| `query` | `str` | Entry point — never modified |
+| `rewritten_query` | `str` | `query_rewriter` |
+| `route` | `str` | `query_router` |
+| `documents` | `list[Document]` | `retriever`, `relevance_grader` |
+| `relevance` | `str` | `relevance_grader` |
+| `retrieval_count` | `int` | `retriever` |
+| `generation` | `str` | `generator` / `direct_answer` |
 
 ---
 
-## Project Structure
+## Project structure
 
 ```
 SupportDoc-Agent/
-├── app.py                          # Streamlit UI entry point
-├── main.py                         # CLI runner for testing
-├── run_ingestion.py                # One-time ingestion script
-├── notes.md                        # Engineering decision log
+├── app.py                     # Streamlit UI
+├── main.py                    # CLI runner
+├── run_ingestion.py           # One-time ingestion script
+├── notes.md                   # Engineering decision log
 ├── pyproject.toml
-├── eval/
-│   ├── eval_dataset.json           # 20 Q&A pairs (hand-written)
-│   └── run_eval.py                 # RAGAs evaluation script
+│
 ├── graph/
-│   ├── state.py                    # SupportDocState TypedDict
-│   ├── graph.py                    # Compiled StateGraph
-│   └── nodes/                      # One file per node
-│       ├── router.py
-│       ├── rewriter.py
-│       ├── retriever.py
-│       ├── grader.py
-│       ├── generator.py
-│       └── _llm.py
-├── prompts/                        # One file per node prompt
+│   ├── state.py               # SupportDocState TypedDict
+│   ├── graph.py               # Compiled StateGraph
+│   └── nodes/
+│       ├── router.py          # Route: retrieve | direct_answer
+│       ├── rewriter.py        # Step-back query rewriting
+│       ├── retriever.py       # ChromaDB similarity search (k=5)
+│       ├── grader.py          # LLM-as-judge relevance filter
+│       ├── generator.py       # Answer + citations | fallback
+│       └── _llm.py            # Shared ChatOpenAI instance
+│
+├── prompts/                   # One module-level constant per node
 │   ├── router_prompt.py
 │   ├── rewriter_prompt.py
 │   ├── grader_prompt.py
 │   └── generator_prompt.py
+│
 ├── data/
-│   └── support_docs.py             # Curated list of Intune article URLs
+│   └── support_docs.py        # 21 curated Intune article URLs + metadata
+│
 ├── ingestion/
-│   ├── loader.py                   # URL → LangChain Documents
-│   └── chunker.py                  # Chunk + embed + store ChromaDB
-└── chroma_db/                      # Persisted ChromaDB vector store
+│   ├── loader.py              # HTTP fetch → BeautifulSoup → list[Document]
+│   └── chunker.py             # Split → embed → store in ChromaDB
+│
+├── eval/
+│   ├── eval_dataset.json      # 20 hand-written Q&A pairs
+│   └── run_eval.py            # RAGAs evaluation script
+│
+└── chroma_db/                 # Persisted vector store (committed to repo)
 ```
 
 ---
 
-## Data Ingestion Pipeline
+## Key engineering decisions
 
-The ingestion pipeline runs **once** before the graph is used. It builds the ChromaDB vector store from a curated corpus of 21 Microsoft Intune troubleshooting articles.
+**LangGraph StateGraph over a LangChain sequential chain**
+A sequential chain cannot loop. The grader → rewriter → retriever retry cycle — the entire agentic value of this system — requires conditional edges and native cycle support. LangGraph provides both.
+
+**LLM-as-judge over cosine similarity threshold for relevance grading**
+A similarity threshold is fast but brittle. A chunk about "certificate renewal" can score 0.75 cosine similarity against "enrollment error 80180014" because vocabulary overlaps, but it is useless for answering that question. An LLM reasons about relevance semantically. Tradeoff: ~300–500 ms and one API call per chunk — worth it at this corpus scale.
+
+**Step-back prompting in the rewriter (not HyDE)**
+HyDE generates a hypothetical answer document and searches with it. For Intune troubleshooting, HyDE hallucinates specific error codes and version numbers in the hypothetical, producing overconfident wrong search queries. Step-back broadens vocabulary predictably — it expands symptoms to general concepts and adds MDM/MEM/Entra ID synonyms — without inventing facts. Error codes are preserved exactly.
+
+**ChromaDB with local persistence over Pinecone**
+~500 chunks, single developer, zero managed infrastructure. ChromaDB adds no retrieval network latency and filters on metadata natively. Would switch to Pinecone for multi-developer or high-query-volume use.
+
+**Fallback as a hardcoded string, not an LLM call**
+When both retrieval attempts return no relevant chunks, calling the LLM would either hallucinate an answer or produce the same "I don't know" with added latency and cost. The fallback is immediate and honest.
+
+---
+
+## Ingestion pipeline
+
+Runs once to build the vector store:
 
 ```bash
 python run_ingestion.py
 ```
 
-### What it does
-
 ```
-intune_articles (URLs)
-       ↓
-   loader.py    →  HTTP GET → BeautifulSoup HTML cleaning → list[Document]
-       ↓
-   chunker.py   →  RecursiveCharacterTextSplitter → OpenAI embeddings → ChromaDB
-       ↓
-   ./chroma_db/ →  Persisted vector store · ready for retrieval
-```
-
-### Ingestion decisions
-
-**Splitter:** `RecursiveCharacterTextSplitter` with `chunk_size=1000`, `chunk_overlap=200`.
-Chose this over `SemanticChunker` because Microsoft Learn articles are already paragraph-structured — the document's own formatting is a reliable semantic boundary. `SemanticChunker` would add embedding cost and latency at ingestion time with marginal quality gain on structured technical prose.
-
-**Embedding model:** `text-embedding-3-small`.
-Newer than `text-embedding-ada-002`, higher MTEB benchmark scores, 5× cheaper. Did not use `text-embedding-3-large` — quality gain from doubled dimensions is negligible at ~500 chunk corpus scale.
-
-**Vector store:** ChromaDB with local persistence.
-Chose ChromaDB over Pinecone because the corpus is ~500 chunks, deployment is single-developer, and local persistence adds zero network latency on retrieval. Would switch to Pinecone for multi-developer or high-query-volume production use.
-
-**HTML cleaning:** Two-layer approach — (1) BeautifulSoup strips noise tags and MS Learn-specific UI chrome classes; (2) post-extraction line filter removes known toolbar strings and lines under 4 words. Microsoft Learn pages contain significant non-content UI (toolbar buttons, auth banners, AI widgets) that pollutes chunks if not stripped.
-
-**Metadata on every chunk:**
-
-```python
-chunk.metadata = {
-    "title":       "...",
-    "url":         "...",        # source citation
-    "category":    "enrollment",
-    "platform":    "Windows",
-    "priority":    1,
-    "doc_index":   0,            # which document
-    "chunk_index": 3,            # position within document
-    "total_chunks": 12,
-}
+21 Intune article URLs (data/support_docs.py)
+        │
+        ▼
+loader.py ── HTTP GET + BeautifulSoup two-layer HTML cleaning
+        │     Layer 1: decompose noise tags (nav, header, footer, script, svg…)
+        │     Layer 2: drop lines < 4 words and known MS Learn toolbar strings
+        ▼
+chunker.py ── RecursiveCharacterTextSplitter (chunk_size=1000, overlap=200)
+        │     + OpenAI text-embedding-3-small
+        │     + positional metadata (doc_index, chunk_index, total_chunks)
+        ▼
+chroma_db/ ── Persisted ChromaDB collection (~500 chunks)
 ```
 
-Metadata survives chunking. Every chunk knows its source URL — this is what makes citations possible in the generator.
+Every chunk carries full source metadata: `title`, `url`, `category`, `platform`, `priority`. The `url` field is what makes citations in the generator possible.
 
-**Re-ingestion:**
+To re-ingest from scratch:
 
 ```bash
 rm -rf ./chroma_db/ && python run_ingestion.py
 ```
 
-ChromaDB appends to existing collections rather than overwriting. Always delete `./chroma_db/` before re-running.
-
-### Verification
-
-`run_ingestion.py` self-verifies after storing:
-
-```
-Total chunks in ChromaDB: 487
-
-Query : 'Intune enrollment error 80180014'
-  Top result : Troubleshooting device enrollment in Intune
-  Preview    : Error 80180014 occurs when the MDM...
-
-Query : 'MDM certificate expired'
-  Top result : Certificate troubleshooting for Intune
-  Preview    : When the MDM push certificate expires...
-```
-
----
-
-## Key Engineering Decisions
-
-**1. LangGraph StateGraph over a LangChain sequential chain**
-A sequential chain is a fixed pipeline — input flows A → B → C with no branching or loops. LangGraph gives conditional edges and native cycle support. The relevance grader → rewriter → retriever retry loop cannot be expressed in a chain at all. The moment you need "if this, go back there", you need a graph.
-
-**2. LLM-as-judge for relevance grading over cosine similarity threshold**
-A cosine threshold is fast but brittle — a chunk about "certificate renewal" might score 0.75 similarity against "enrollment error 80180014" because vocabulary overlaps, but it is not useful for answering that question. An LLM reasons about relevance semantically. Tradeoff: ~300ms and one API call per chunk. Worth it for the quality gain at this corpus scale.
-
-**3. Query rewriting on retry instead of re-running the original**
-The original query failed retrieval once. Running it again returns identical chunks — nothing changes. The rewriter makes the query more specific and technical, increasing the chance that semantic search finds a relevant match on the second pass.
-
-**4. ChromaDB over Pinecone for local persistence**
-No managed infrastructure, no API latency on retrieval, no credentials to rotate. For a single-developer project with ~500 chunks, eliminating retrieval network round-trips and infrastructure overhead is the correct tradeoff.
-
-**5. Manual source curation over automated scraping**
-Community blogs (Prajwal Desai, Anoop C Nair) sometimes cover the same Intune topics as Microsoft Learn, just worded differently. Used domain knowledge to include community sources only for topics not covered by Microsoft Learn, marked with `priority: 2` in metadata. More accurate than a similarity threshold at this corpus size.
+> ChromaDB appends to existing collections — always delete the directory before re-running.
 
 ---
 
 ## Evaluation
 
-Evaluated using RAGAs on a hand-written dataset of 20 Intune Q&A pairs covering enrollment, app management, policies, compliance, and certificates. Dataset includes 3 questions where the answer is not in the corpus — testing the fallback path.
+Evaluated with [RAGAs](https://docs.ragas.io) on 20 hand-written Q&A pairs: 17 Intune troubleshooting questions mapped 1-to-1 to the ingested articles, plus 3 out-of-corpus questions that test the fallback path.
 
-### Scores
+| Metric | Measures | Baseline (k=4) | After fix (k=5) | Δ |
+|--------|----------|:--------------:|:---------------:|:-:|
+| `faithfulness` | Answer grounded in retrieved chunks | 0.31 | 0.31 | — |
+| `answer_relevancy` | Answer addresses the question | 0.09 | 0.09 | — |
+| `context_precision` | Retrieved chunks are relevant | 0.15 | **0.20** | **+0.05 ✓** |
+| `context_recall` | Chunks contain the ground truth | 0.32 | 0.32 | — |
 
-Evaluated on 20 hand-written Q&A pairs: 17 Intune troubleshooting questions mapped to the ingested corpus, 3 out-of-corpus questions testing the fallback path.
+**Retrieval fix (Checkpoint 8):** `k=4 → k=5`. One extra chunk per call gives the grader one more relevant candidate, improving context precision by the target +0.05.
 
-| Metric | What it measures | Baseline (k=4) | After fix (k=5) | Δ |
-|--------|-----------------|----------------|-----------------|---|
-| `faithfulness` | Answer supported by retrieved chunks | 0.31 | 0.31 | +0.00 |
-| `answer_relevancy` | Answer addresses the question | 0.09 | 0.09 | +0.00 |
-| `context_precision` | Retrieved chunks are relevant to the question | 0.15 | **0.20** | **+0.05** |
-| `context_recall` | Chunks contain the information needed to answer | 0.32 | 0.32 | +0.00 |
-
-**Retrieval fix:** increased `k` from 4 to 5. One extra chunk per retrieval call gives the grader an additional relevant candidate, improving context precision by the target +0.05 delta.
-
-**Why scores are modest overall:** the corpus is 21 troubleshooting articles. For questions whose answer spans articles not yet in the corpus, the grader correctly rejects the retrieved chunks and returns the fallback string — which counts as zero across all context metrics. The pipeline is working as designed; the ceiling is corpus coverage.
-
-### Running evaluation
+**Why scores are modest:** the corpus is 21 troubleshooting articles. For questions not covered by those articles, the grader correctly rejects every chunk and returns the fallback string — which scores zero across all context metrics. The pipeline is working as designed; the ceiling is corpus coverage, not retrieval algorithm quality. Questions *within* the corpus score faithfulness 0.63–0.82 and context_precision ~1.0.
 
 ```bash
 python eval/run_eval.py
@@ -218,44 +211,34 @@ python eval/run_eval.py
 
 ---
 
-## Tech Stack
+## Tech stack
 
-| Component | Technology | Decision |
-|-----------|-----------|---------|
-| Graph orchestration | LangGraph StateGraph | Conditional edges + native cycle support |
-| LLM | GPT-4o-mini | Cost-efficient for multi-node graph with grading calls |
-| Embeddings | text-embedding-3-small | Higher MTEB scores than ada-002 at 5× lower cost |
-| Vector store | ChromaDB | Local persistence, zero retrieval latency, built-in metadata filtering |
-| Document loading | LangChain + BeautifulSoup | Two-layer HTML cleaning for MS Learn UI chrome |
-| Evaluation | RAGAs | 4-metric evaluation: faithfulness, relevancy, precision, recall |
-| Observability | LangSmith | Node-by-node trace for every graph invocation |
-| UI | Streamlit | Minimal deployment surface, public URL in one command |
-| Package management | uv | 10-100× faster than pip, built-in lock files |
+| Component | Technology |
+|-----------|-----------|
+| Graph orchestration | LangGraph StateGraph |
+| LLM | GPT-4o-mini (temperature=0 on all decision nodes) |
+| Embeddings | text-embedding-3-small |
+| Vector store | ChromaDB (local persistence) |
+| Document loading | requests + BeautifulSoup4 |
+| Evaluation | RAGAs (faithfulness, answer_relevancy, context_precision, context_recall) |
+| Observability | LangSmith (node-by-node traces) |
+| UI | Streamlit |
+| Package management | uv |
 
 ---
 
-## Getting Started
+## Getting started
 
-### Prerequisites
-
-- Python 3.11+
-- [uv](https://docs.astral.sh/uv/) installed
-- OpenAI API key
-- LangSmith API key ([free tier](https://smith.langchain.com))
-
-### Setup
+**Prerequisites:** Python 3.11+, [uv](https://docs.astral.sh/uv/), OpenAI API key, LangSmith API key (free tier)
 
 ```bash
 git clone https://github.com/mojomahendia/SupportDoc-Agent
 cd SupportDoc-Agent
-
 uv venv && source .venv/bin/activate
 uv pip install -e .
 ```
 
-### Environment variables
-
-Create a `.env` file at the project root:
+Create `.env` at the project root:
 
 ```env
 OPENAI_API_KEY=sk-...
@@ -265,39 +248,32 @@ LANGCHAIN_PROJECT=SupportDocAgent
 USER_AGENT=supportdoc-agent/1.0
 ```
 
-### Run ingestion (once)
+The ChromaDB vector store is committed to the repo — no ingestion step needed to run the app.
 
 ```bash
-python run_ingestion.py
-```
-
-### Run CLI
-
-```bash
-python main.py
-```
-
-### Run UI
-
-```bash
-streamlit run app.py
+streamlit run app.py        # Streamlit UI  →  http://localhost:8501
+python main.py              # CLI for quick testing
+python run_ingestion.py     # Re-ingest (only needed after corpus changes)
 ```
 
 ---
 
 ## Observability
 
-Every query is traced node-by-node in LangSmith. Set `LANGCHAIN_TRACING_V2=true` in your `.env` and open [smith.langchain.com](https://smith.langchain.com) to see:
+Every query is traced node-by-node in LangSmith. With `LANGCHAIN_TRACING_V2=true` set, open [smith.langchain.com](https://smith.langchain.com) to inspect:
 
 - Which route the query took (`retrieve` vs `direct_answer`)
-- Whether the relevance grader triggered a retry
-- Exact chunks passed to the generator
+- The exact rewritten query sent to ChromaDB
+- Per-chunk grader verdicts (YES / NO)
+- Which chunks reached the generator
 - End-to-end latency per node
 
 ---
 
 ## Author
 
-**Manoj Kumar** · M.Sc. Computer Science (AI & ML), Scaler Neoversity
+**Manoj Kumar**  
+M.Sc. Computer Science (AI & ML), Scaler Neoversity  
+4 years resolving Microsoft Intune escalations · now building the systems that answer those questions
 
-[GitHub](https://github.com/mojomahendia)
+[GitHub →](https://github.com/mojomahendia)
