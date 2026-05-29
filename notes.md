@@ -71,6 +71,13 @@ load_documents() → chunk_documents() → embed → store in ChromaDB
 ```
 Run once. Agent queries ChromaDB directly at runtime.
 
+## Query Rewriter (`graph/nodes/rewriter.py`)
+- Chose step-back prompting (arxiv 2310.06117) over HyDE (arxiv 2212.10496).
+  HyDE generates a hypothetical answer document and uses it as the search query — but for Intune troubleshooting, HyDE hallucinates domain-specific details in the hypothetical, producing a search query full of confident-sounding wrong information. Step-back is more controlled: it broadens vocabulary predictably by expanding specific symptoms to general concepts and adding MDM/MEM/Entra ID synonyms. Error codes are preserved exactly — they are the highest-signal retrieval tokens and must not be paraphrased.
+- Always rewrites from `state["query"]` (the original), never from the previous `rewritten_query`. Original preserves more user intent; rewriting the rewrite risks drift.
+- `retrieval_count` is passed to the prompt so the LLM knows to go broader on the second attempt.
+- `retrieval_count` is NOT incremented here — the retriever node increments it when the ChromaDB call actually happens, keeping "attempts so far" semantically correct.
+
 ## Graph State (`graph/state.py`)
 - Plain `TypedDict` with all seven fields present: `query`, `rewritten_query`, `route`, `documents`, `relevance`, `retrieval_count`, `generation`.
 - No `NotRequired` or `total=False` — LangGraph nodes return partial dicts and the framework merges them back in. TypedDict completeness is not validated at runtime; fields absent on the first pass are simply not in the dict yet.
