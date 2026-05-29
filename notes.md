@@ -83,6 +83,12 @@ Run once via `python run_ingestion.py`. Agent queries ChromaDB directly at runti
 - `retrieval_count` is passed to the prompt so the LLM knows to go broader on the second attempt.
 - `retrieval_count` is NOT incremented here — the retriever node increments it when the ChromaDB call actually happens, keeping "attempts so far" semantically correct.
 
+## Generator (`graph/nodes/generator.py`)
+- Retrieved case prompt instructs "use ONLY the provided excerpts" — prevents the LLM from mixing in training-data knowledge that may be outdated or contradict the official Microsoft docs. If the excerpts don't fully answer the question, the LLM is instructed to say so explicitly rather than silently filling gaps with potentially wrong information.
+- Citations deduped by URL (not by title) — a single article produces multiple chunks; we want one citation per source article. Sorted by `priority` metadata so Microsoft Learn (priority 1) appears before community blogs (priority 2).
+- Fallback is a hardcoded string with no LLM call — when both retrieval attempts failed, the corpus doesn't cover the topic. Calling the LLM at this point would either hallucinate an answer or produce the same "I don't know" with added latency and cost. Neither is acceptable.
+- Branch order: check `documents` emptiness first, then `route`. This means an empty `documents` list always triggers fallback regardless of route — a defensive guard against unexpected state combinations.
+
 ## Relevance Grader (`graph/nodes/grader.py`)
 - LLM-as-judge over cosine similarity threshold: a similarity threshold is fast but brittle — a chunk about "certificate renewal" might score high similarity against "enrollment error 80180014" because vocabulary overlaps, but it isn't useful for answering that question. The LLM reasons about relevance semantically. Tradeoff: ~300–500ms and one API call per chunk. Worth it for quality at this corpus scale.
 - `relevant: bool` in the Pydantic model over `Literal["YES","NO"]`: bool is cleaner — no string parsing, Pydantic validates it natively via `with_structured_output`, and the grader loop reads `score.relevant` directly.
