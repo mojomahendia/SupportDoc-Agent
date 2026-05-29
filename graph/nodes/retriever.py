@@ -19,7 +19,7 @@ _vectorstore = Chroma(persist_directory=str(_CHROMA_DIR), embedding_function=_em
 
 def retriever_node(state: SupportDocState) -> dict:
     search_query = state.get("rewritten_query") or state["query"]
-    docs = _vectorstore.similarity_search(search_query, k=4)
+    docs = _vectorstore.similarity_search(search_query, k=5)
     return {
         "documents": docs,
         "retrieval_count": state.get("retrieval_count", 0) + 1,

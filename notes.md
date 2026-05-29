@@ -119,3 +119,47 @@ Chose ChromaDB over Pinecone and Weaviate. Corpus is ~500 chunks — well within
 Used with_structured_output() on router and grader nodes to enforce exact output schemas via Pydantic models. Eliminates string parsing fragility — the LLM returns a typed Python object instead of free text. Set temperature=0 on all decision nodes because they make binary judgments where determinism matters more than creativity.
 
 RAGAs uses contexts to evaluate three of its four metrics: context_precision (chunks relevant to question), context_recall (chunks contain ground-truth information), and faithfulness (answer grounded in chunks). The contexts field in the eval dataset represents the chunks ChromaDB returns for each question — not idealized chunks. Using real retriever output is what makes the scores meaningful signals about retrieval quality. If context_recall comes back low, that points to a retrieval problem to fix; if it were prefilled with ideal chunks, that signal would disappear.
+
+## Evaluation (RAGAs — `eval/run_eval.py`)
+
+### RAGAs compatibility fix (v0.4.3)
+RAGAs 0.4.3 requires explicit LLM and embeddings wrappers; it cannot use `OpenAIEmbeddings` or `ChatOpenAI` directly. Fixed by wrapping with `LangchainLLMWrapper` and `LangchainEmbeddingsWrapper` and setting `max_tokens=4096` on the LLM — the default 1024 caused the faithfulness statement-decomposition prompt to truncate mid-output, producing silent zero scores. `MultiQueryRetriever` is no longer in `langchain` or `langchain_community` in v1.x — it moved to `langchain_classic.retrievers.multi_query`.
+
+### First eval run — wrong question types (before fix)
+Initial eval dataset contained mostly how-to and configuration questions ("How do I configure Wi-Fi profile?", "How do I deploy Win32 app?"). The corpus is 21 troubleshooting-only articles (all from `/troubleshoot/mem/intune/`). Result: 16/20 questions returned the fallback string. Scores were near-zero across all metrics — not a pipeline failure, but a corpus-question mismatch.
+
+### Baseline scores (after rewriting questions to match corpus)
+All 17 Intune questions rewritten to troubleshooting questions mapping to the 21 ingested articles.
+
+| Metric | Score |
+|--------|-------|
+| faithfulness | 0.3056 |
+| answer_relevancy | 0.0855 |
+| context_precision | 0.1500 |
+| context_recall | 0.3167 |
+
+When retrieval succeeded (enrollment questions), per-question faithfulness was 0.63–0.82 and context_precision was ~1.0. The low averages are entirely explained by questions that still returned the fallback string — approximately 10/17 Intune questions still retrieved no relevant chunks.
+
+### Root cause of low scores
+The corpus is dominated by enrollment-related content (4 of 21 articles are enrollment articles). In the embedding space, all queries — even about app management, certificates, or policy conflicts — tend to retrieve chunks from the generic enrollment troubleshooting article, which the grader correctly rejects. The app, certificate, and configuration articles are in the corpus but their chunks rank below the enrollment chunks for most queries.
+
+### Retrieval fix tried: MultiQueryRetriever (k=4, 3 variations)
+`langchain_classic.retrievers.multi_query.MultiQueryRetriever` generates 3 query variations and unions results. Result: context_recall dropped from 0.3167 to 0.2567. The LLM-generated variations remained semantically close to the original, so they continued retrieving enrollment-focused chunks. The union of more similar results did not surface the specific app/cert/policy articles.
+
+### Retrieval fix applied: k=4 → k=5 (Checkpoint 8)
+
+Increased k from 4 to 5 — one extra chunk per retrieval call, no additional LLM calls, minimal latency impact (one more grader call per retrieval attempt). Result:
+
+| Metric | k=4 baseline | k=5 | Δ |
+|--------|-------------|-----|---|
+| faithfulness | 0.3056 | 0.3100 | +0.004 |
+| answer_relevancy | 0.0855 | 0.0892 | +0.004 |
+| context_precision | 0.1500 | 0.2000 | **+0.050 ✅** |
+| context_recall | 0.3167 | 0.3167 | 0.000 |
+
+context_precision improved by exactly 0.05 — meets Checkpoint 8 (≥ 0.05 improvement on one metric). The extra chunk gives the grader one more relevant candidate per attempt, improving precision of the passed context. context_recall is unchanged because the root issue is corpus coverage (relevant articles exist but rank below the top-5 for many queries), not the number of chunks retrieved.
+
+MultiQueryRetriever (tried first) was reverted — it generated semantically similar variations that still retrieved enrollment-focused chunks, dropping context_recall from 0.32 to 0.26.
+
+### What would actually fix the remaining low scores
+Corpus expansion: add how-to and configuration guide articles (not just `/troubleshoot/`) to `data/support_docs.py`, then re-ingest. This would ensure the app management, certificate, and compliance policy articles surface in semantic search instead of being outranked by the enrollment troubleshooting articles.

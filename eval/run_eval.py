@@ -4,7 +4,11 @@ from datetime import datetime
 from pathlib import Path
 
 from datasets import Dataset
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings as OAIEmbeddings
 from ragas import evaluate
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import (
     answer_relevancy,
     context_precision,
@@ -15,6 +19,22 @@ from ragas.metrics import (
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from graph.graph import graph  # noqa: E402
+
+# RAGAs 0.4.x requires explicit LLM + embeddings wrappers.
+# max_tokens=4096 prevents the faithfulness statement-decomposition prompt
+# from being truncated mid-output (default 1024 causes retry failures).
+_ragas_llm = LangchainLLMWrapper(
+    ChatOpenAI(model="gpt-4o-mini", temperature=0, max_tokens=4096)
+)
+_ragas_embeddings = LangchainEmbeddingsWrapper(
+    OAIEmbeddings(model="text-embedding-3-small")
+)
+
+faithfulness.llm = _ragas_llm
+context_precision.llm = _ragas_llm
+context_recall.llm = _ragas_llm
+answer_relevancy.llm = _ragas_llm
+answer_relevancy.embeddings = _ragas_embeddings
 
 DATASET_PATH = Path(__file__).parent / "eval_dataset.json"
 
