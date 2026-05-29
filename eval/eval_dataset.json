@@ -1,0 +1,122 @@
+[
+  {
+    "question": "What are the first diagnostic steps when a device fails to enroll in Intune?",
+    "ground_truth": "Verify Intune is configured properly for the device platform (enrollment enabled, correct license assigned to user, no enrollment restriction blocking the device). Run the Intune enrollment troubleshooting diagnostic in the Microsoft 365 admin center under Support > Help & support. Review the device event logs and check for any error codes reported during the enrollment attempt.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-device-enrollment-in-intune",
+    "contexts": []
+  },
+  {
+    "question": "What does Windows enrollment error 80180014 indicate and how is it resolved?",
+    "ground_truth": "Error 80180014 indicates that the MDM Terms of Use have not been accepted by the user, or the device is blocked by an enrollment restriction. To resolve: ensure the user has accepted the Intune Terms and Conditions, verify the user has an Intune license assigned, check that no enrollment restriction is blocking the device type or OS version, and confirm the device is not already enrolled in another MDM solution.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-windows-enrollment-errors",
+    "contexts": []
+  },
+  {
+    "question": "Why might an iOS device fail to enroll with a 'Profile installation failed' error in Intune?",
+    "ground_truth": "Common causes include an expired Apple MDM push certificate, the device being unable to reach Apple activation servers, an untrusted root certificate, or the user not having an Intune license. Verify the MDM push certificate validity in the Intune admin center under Devices > iOS/iPadOS enrollment. Ensure the device has internet connectivity and can reach apple.com endpoints.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-ios-enrollment-errors",
+    "contexts": []
+  },
+  {
+    "question": "What should I check first when an Android Enterprise device fails to enroll in Intune?",
+    "ground_truth": "Verify the Android Enterprise binding is configured in the Intune admin center under Devices > Android > Android enrollment. Confirm the device supports Android Enterprise (Android 5.0+), the user has a valid Intune license, and no enrollment restriction is blocking Android Enterprise work profile enrollment. Check that the Intune Company Portal app is installed and up to date on the device.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-android-enrollment",
+    "contexts": []
+  },
+  {
+    "question": "Why would Windows Group Policy-triggered MDM auto-enrollment fail silently?",
+    "ground_truth": "Common causes: the MDM user scope in Azure AD Mobility settings does not cover the user, the device is not Azure AD registered or hybrid joined, a pre-existing MDM enrollment conflicts with the new enrollment attempt, or the EnableAutomaticMDMEnrollmentUsingGroupPolicy registry key is misconfigured. Check the event log at Applications and Services > Microsoft > Windows > DeviceManagement-Enterprise-Diagnostics-Provider > Admin for error details.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-enrollment/troubleshoot-windows-auto-enrollment",
+    "contexts": []
+  },
+  {
+    "question": "Why would a deployed Intune app show 'Not applicable' status for a targeted device?",
+    "ground_truth": "'Not applicable' means the device fails the app's requirement rules — minimum OS version, CPU architecture (x86/x64), available disk space, or a custom PowerShell requirement script that returned a non-zero exit code or false. Review the requirement rules configured on the app in Intune and verify the target device meets each condition. Check the IME log at C:\\ProgramData\\Microsoft\\IntuneManagementExtension\\Logs for the specific rule that failed.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-management/troubleshoot-app-install",
+    "contexts": []
+  },
+  {
+    "question": "What are the common causes of Intune app installation failures and how do I start troubleshooting?",
+    "ground_truth": "Start by checking the app installation status in Intune admin center under Apps > Monitor > App install status. Review the Intune Management Extension log at C:\\ProgramData\\Microsoft\\IntuneManagementExtension\\Logs\\IntuneManagementExtension.log for error codes. Common causes: detection rule mismatch (app reports not installed even when it is), failed dependencies, the device not being enrolled or the IME service not running, or network connectivity issues to Microsoft content delivery endpoints.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-management/app-management",
+    "contexts": []
+  },
+  {
+    "question": "Why might an app protection policy fail to apply to a user's device after assignment in Intune?",
+    "ground_truth": "Verify: the user has an Intune or EMS license, the policy is assigned to a group the user belongs to, the target app is in the list of managed apps, and the user has signed into the app with their work or school account. Use the Troubleshooting pane in Intune admin center — search for the user and review App protection status to confirm whether the policy has been deployed. Conditional Access may also block access before the policy is evaluated.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-protection-policies/troubleshoot-app-protection-policy-deployment",
+    "contexts": []
+  },
+  {
+    "question": "What should I check when a user cannot access corporate data through a MAM-protected app?",
+    "ground_truth": "Confirm the user has signed in to the app with their work account (not personal). Check that the app protection policy is assigned and shows as deployed in the Intune Troubleshooting pane for that user. Verify the app version is supported by the policy and no conditional launch settings (PIN attempts, jailbreak detection) are blocking access. Review the App protection status report for the specific policy and user.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-protection-policies/troubleshoot-mam",
+    "contexts": []
+  },
+  {
+    "question": "Why would an Intune app protection policy block users from copying data between apps?",
+    "ground_truth": "The 'Send org data to other apps' setting in the app protection policy controls this behavior. If set to 'Policy managed apps only' or 'None', users cannot paste or transfer data to unmanaged apps. This is intentional data loss prevention behavior. To allow specific exceptions, use the 'Select apps to exempt' option to whitelist specific apps. Review the data transfer settings in the policy under Data protection > Data transfer.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/app-protection-policies/troubleshoot-data-transfer",
+    "contexts": []
+  },
+  {
+    "question": "What are the most common failure points when deploying PKCS certificates through Intune?",
+    "ground_truth": "Common failures occur at: (1) Intune Certificate Connector not running or unable to reach the CA — check connector service status and logs at %programfiles%\\Microsoft Intune\\NDESConnectorSvc\\Logs; (2) certificate template permissions not allowing the connector service account to enroll; (3) incorrect CA server name or template name in the PKCS profile; (4) the device cannot reach the connector URL. Verify the connector is active in Intune under Tenant administration > Connectors.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/certificates/troubleshoot-pkcs-certificate-profiles",
+    "contexts": []
+  },
+  {
+    "question": "What are the common failure points in SCEP certificate profile deployment with Intune?",
+    "ground_truth": "SCEP failures typically occur at one of four stages: (1) profile not deploying to the device; (2) device cannot reach the NDES URL — test by browsing to the NDES URL from the device; (3) NDES cannot communicate with the CA — check NDES event logs; (4) the certificate is issued but not delivered back to the device. For each stage, check the NDES connector logs and the device's Certificate enrollment event log.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/certificates/troubleshoot-scep-certificate-profiles",
+    "contexts": []
+  },
+  {
+    "question": "Why would a configuration profile show 'Conflict' status for a device in Intune?",
+    "ground_truth": "Conflict status means two or more configuration profiles are targeting the same setting with different values on the same device, and Intune cannot determine which value to apply. Use the device's per-setting status view in the Intune admin center to identify which profiles conflict. Resolve by consolidating conflicting profiles, removing one of the conflicting assignments, or scoping profiles to non-overlapping device groups.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-configuration/troubleshoot-policies-in-microsoft-intune",
+    "contexts": []
+  },
+  {
+    "question": "What causes co-management auto-enrollment to fail for existing Configuration Manager-managed devices?",
+    "ground_truth": "Common causes: the device is not hybrid Azure AD joined (required for co-management), the MDM user scope in Azure AD does not include the device user, the Configuration Manager client cannot reach Intune enrollment endpoints, or a co-management configuration policy was not correctly deployed. Check CoManagementHandler.log on the device and the ADALOperationProvider.log for Azure AD token acquisition failures.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/comanage-configmgr/troubleshoot-co-management-auto-enrolling",
+    "contexts": []
+  },
+  {
+    "question": "Why would a remote wipe action stay in 'Pending' state in the Intune admin center?",
+    "ground_truth": "A pending wipe means the device has not yet checked in to receive the action. Verify the device is powered on and connected to the internet. If the device is offline, the wipe will execute on its next check-in. If the device has been unenrolled or the MDM certificate has expired, the action will remain pending indefinitely and the device may need to be retired from Intune instead.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-management/troubleshoot-device-actions",
+    "contexts": []
+  },
+  {
+    "question": "Why would Windows Update ring policies not apply to an Intune-enrolled device?",
+    "ground_truth": "Common causes: the update ring is not assigned to the device's group, a Group Policy Object (GPO) from on-premises AD is overriding the Intune policy (GPO takes precedence over MDM for Windows Update in some configurations), or the device is on Windows 10 Home which does not support all update ring settings. Check the device's MDM Diagnostics report and the Windows Update event log for policy application status.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-protection/troubleshoot-update-rings",
+    "contexts": []
+  },
+  {
+    "question": "Why would Windows 10 feature updates not be offered to Intune-managed devices even after a feature update policy is assigned?",
+    "ground_truth": "Common causes: the device does not meet hardware or compatibility requirements for the target version, a Safeguard Hold by Microsoft is blocking the update on that specific device model, the feature update profile assignment does not include the device, or a Windows Update for Business deferral period is still active. Check the Windows Update event log and the Intune feature update report for deployment status per device.",
+    "source_url": "https://learn.microsoft.com/en-us/troubleshoot/mem/intune/device-configuration/windows-feature-updates-never-offered",
+    "contexts": []
+  },
+  {
+    "question": "How do I configure Cisco AnyConnect VPN client policies on Windows endpoints?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  },
+  {
+    "question": "What is the maximum subnet size supported in Azure Virtual Network?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  },
+  {
+    "question": "How do I install and promote a domain controller on Windows Server 2022?",
+    "ground_truth": "I don't have enough information.",
+    "source_url": "",
+    "contexts": []
+  }
+]
